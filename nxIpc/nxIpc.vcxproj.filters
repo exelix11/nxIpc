@@ -1,0 +1,51 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Lib">
+      <UniqueIdentifier>{ea45ae35-1936-4914-b100-17870d32f476}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sysmodule">
+      <UniqueIdentifier>{83a344b7-a4d2-49ef-8d30-2df7dbb05b15}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Client">
+      <UniqueIdentifier>{f0b6f9c4-760a-4fac-8c8f-3f9d7b321e4a}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="cpp.hint" />
+    <None Include="..\test\client\Makefile">
+      <Filter>Client</Filter>
+    </None>
+    <None Include="..\test\sysmodule\Makefile">
+      <Filter>Sysmodule</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\test\sysmodule\source\IPCInterface.hpp">
+      <Filter>Sysmodule</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ThreadedServer.hpp">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Types.hpp">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Exceptions.hpp">
+      <Filter>Lib</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Server.hpp">
+      <Filter>Lib</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\test\sysmodule\source\main.c">
+      <Filter>Sysmodule</Filter>
+    </ClCompile>
+    <ClCompile Include="..\test\sysmodule\source\cppshim.cpp">
+      <Filter>Sysmodule</Filter>
+    </ClCompile>
+    <ClCompile Include="..\test\client\source\main.c">
+      <Filter>Client</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
