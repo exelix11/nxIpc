@@ -125,7 +125,7 @@ namespace nxIpc
 			bool ShouldClose = false;
 
 			R_THROW(svcReplyAndReceive(&_idx, &handle, 1, 0, UINT64_MAX));
-			IPCRequest r = IPCRequest::ParseFromTLS();
+			Request r = Request::ParseFromTLS();
 
 			switch (r.hipc.meta.type)
 			{
@@ -137,15 +137,15 @@ namespace nxIpc
 				{
 					LogFunction("%s", ex.what());
 					ShouldClose = true;
-					IPCResponse(R_EXCEPTION_IN_HANDLER).PrepareResponse();
+					Response(R_EXCEPTION_IN_HANDLER).Finalize();
 				}
 				break;
 			case CmifCommandType_Close:
-				IPCResponse(0).PrepareResponse();
+				Response(0).Finalize();
 				ShouldClose = true;
 				break;
 			default:
-				IPCResponse(MAKERESULT(11, 403)).PrepareResponse();
+				Response(MAKERESULT(11, 403)).Finalize();
 				break;
 			}
 

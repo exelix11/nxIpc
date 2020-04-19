@@ -46,10 +46,10 @@ namespace nxIpc
 		}
 	};
 
-	struct IPCRequest
+	struct Request
 	{
-		IPCRequest(IPCRequest&) = delete;
-		IPCRequest& operator=(IPCRequest&) = delete;
+		Request(Request&) = delete;
+		Request& operator=(Request&) = delete;
 
 		HipcParsedRequest hipc;
 		u64 cmdId = 0;
@@ -90,13 +90,13 @@ namespace nxIpc
 			return res;
 		}
 
-		static IPCRequest ParseFromTLS()
+		static Request ParseFromTLS()
 		{
-			return IPCRequest();
+			return Request();
 		}
 
 	private:
-		IPCRequest()
+		Request()
 		{
 			void* base = armGetTls();
 
@@ -122,10 +122,10 @@ namespace nxIpc
 		}
 	};
 
-	struct IPCResponse
+	struct Response
 	{
 		template<typename T>
-		IPCResponse& Payload(const T& p)
+		Response& Payload(const T& p)
 		{
 			if (R_FAILED(result))
 				throw std::logic_error("Payload is not supported when result is non zero");
@@ -134,12 +134,12 @@ namespace nxIpc
 			return *this;
 		}
 
-		IPCResponse(Result rc = 0)
+		Response(Result rc = 0)
 		{
 			result = rc;
 		}
 
-		IPCResponse& CopyHandle(Handle h)
+		Response& CopyHandle(Handle h)
 		{
 			if (R_FAILED(result))
 				throw std::logic_error("handles are not supported when result is non zero");
@@ -149,7 +149,7 @@ namespace nxIpc
 			return *this;
 		}
 
-		Result PrepareResponse()
+		Result Finalize()
 		{
 			meta.type = CmifCommandType_Request;
 			meta.num_data_words = (sizeof(IPCServerHeader) + payload.length + 0x10) / 4;

@@ -361,3 +361,4 @@ MigrationBackup/
 build/
 *.nso
 *.elf
+*.nro
