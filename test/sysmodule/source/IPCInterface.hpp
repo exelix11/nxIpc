@@ -11,7 +11,7 @@ using namespace nxIpc;
 class TestServer
 {
 public:
-	using CallHandler = void (TestServer::*)(IPCRequest & req);
+	using CallHandler = void (TestServer::*)(Request & req);
 
 	const std::array<CallHandler, 10> handlers {
 		&TestServer::SetValue,
@@ -22,11 +22,11 @@ public:
 		&TestServer::FireEvent,
 	};
 
-	bool ReceivedCommand(IPCRequest& req)
+	bool ReceivedCommand(Request& req)
 	{
 		if (req.cmdId >= handlers.size())
 		{
-			IPCResponse(R_UNKNOWN_CMDID).PrepareResponse();
+			Response(R_UNKNOWN_CMDID).Finalize();
 			return true;
 		}
 
@@ -34,7 +34,7 @@ public:
 
 		if (!handler)
 		{
-			IPCResponse(R_UNIMPLEMENTED_CMDID).PrepareResponse();
+			Response(R_UNIMPLEMENTED_CMDID).Finalize();
 			return true;
 		}
 
@@ -52,18 +52,18 @@ public:
 	}
 
 protected:
-	void SetValue(IPCRequest& req)
+	void SetValue(Request& req)
 	{
 		valueStore = *req.Payload<MySettableValue>();
-		IPCResponse(0).PrepareResponse();
+		Response().Finalize();
 	}
 
-	void GetValue(IPCRequest& req)
+	void GetValue(Request& req)
 	{	
-		IPCResponse(0).Payload(valueStore).PrepareResponse();
+		Response().Payload(valueStore).Finalize();
 	}
 
-	void EchoSend(IPCRequest& req)
+	void EchoSend(Request& req)
 	{
 		auto buf = req.ReadBuffer(0);
 
@@ -74,32 +74,32 @@ protected:
 		data = new u8[dataLen];
 		buf.CopyTo_s(data, dataLen);
 
-		IPCResponse(0).Payload((u32)dataLen).PrepareResponse();	
+		Response().Payload((u32)dataLen).Finalize();	
 	}
 
-	void EchoReceive(IPCRequest& req)
+	void EchoReceive(Request& req)
 	{
 		if (data)
 		{
 			req.WriteBuffer(0).AssignFrom_s(data, dataLen);
-			IPCResponse(0).Payload((u32)dataLen).PrepareResponse();
+			Response().Payload((u32)dataLen).Finalize();
 		}
 		else
-			IPCResponse(666).PrepareResponse();
+			Response(666).Finalize();
 	}
 
-	void GetEvent(IPCRequest& req)
+	void GetEvent(Request& req)
 	{
 		if (!eventActive(&evt))
 			R_THROW(eventCreate(&evt, true));
 
-		IPCResponse().CopyHandle(evt.revent).PrepareResponse();
+		Response().CopyHandle(evt.revent).Finalize();
 	}
 
-	void FireEvent(IPCRequest& req)
+	void FireEvent(Request& req)
 	{
 		eventFire(&evt);
-		IPCResponse().PrepareResponse();
+		Response().Finalize();
 	}
 private:
 	struct PACKED MySettableValue
