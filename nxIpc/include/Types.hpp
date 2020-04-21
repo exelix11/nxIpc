@@ -2,20 +2,14 @@
 #include <switch.h>
 #include <cstring>
 #include <algorithm>
+#include "Exceptions.hpp"
 
 namespace nxIpc
 {
-	struct PACKED IPCServerHeader {
-		u64 magic;
-		union
-		{
-			u64 cmdId;
-			u64 result;
-		};
-	};
-
 	struct Buffer
 	{
+		Buffer(const void* data, size_t len) : data(data), length(len) {}
+
 		const void* data;
 		size_t length;
 
@@ -32,6 +26,8 @@ namespace nxIpc
 
 	struct WritableBuffer
 	{
+		WritableBuffer(void* data, size_t len) : data(data), length(len) {}
+
 		void* data;
 		size_t length;
 
@@ -46,18 +42,25 @@ namespace nxIpc
 		}
 	};
 
+	// Warning about TLS usage:
+	//   This class doesn't copy the TLS data but works with it in-place, this means that any
+	//   call that invokes an IPC request (either manually or from libnx like fs access)
+	//   will overwrite the TLS with the response from that call, either do it in another thread
+	//   or get all the data you need out of the Request class first
 	struct Request
 	{
-		Request(Request&) = delete;
-		Request& operator=(Request&) = delete;
+		Request(const Request&) = delete;
+		Request& operator=(const Request&) = delete;
 
 		HipcParsedRequest hipc;
 		u64 cmdId = 0;
 		u32 size = 0;
-		void* ptr = nullptr;
+		const void* ptr = nullptr;
 
 		template <typename T> const T* Payload()
 		{
+			AssertTLSValid();
+
 			if (sizeof(T) > size)
 				throw std::logic_error("Payload size is wrong");
 
@@ -66,6 +69,8 @@ namespace nxIpc
 
 		Buffer ReadBuffer(u8 index)
 		{
+			AssertTLSValid();
+
 			if (index >= hipc.meta.num_send_buffers)
 				throw std::logic_error("Read buffer index out of bounds");
 
@@ -79,6 +84,8 @@ namespace nxIpc
 
 		WritableBuffer WriteBuffer(u8 index)
 		{
+			AssertTLSValid();
+
 			if (index >= hipc.meta.num_recv_buffers)
 				throw std::logic_error("Write buffer index out of bounds");
 
@@ -99,26 +106,36 @@ namespace nxIpc
 		Request()
 		{
 			void* base = armGetTls();
-
 			hipc = hipcParseRequest(base);
 
 			if (hipc.meta.type == CmifCommandType_Request)
 			{
-				IPCServerHeader* header = (IPCServerHeader*)cmifGetAlignedDataStart(hipc.data.data_words, base);
+				CmifInHeader* header = (CmifInHeader*)cmifGetAlignedDataStart(hipc.data.data_words, base);
 				size_t dataSize = hipc.meta.num_data_words * 4;
 
 				if (!header)
 					throw std::runtime_error("HeaderPTR is null");
-				if (dataSize < sizeof(IPCServerHeader))
+				if (dataSize < sizeof(CmifInHeader))
 					throw std::runtime_error("Data size is smaller than sizeof(IPCServerHeader)");
 				if (header->magic != CMIF_IN_HEADER_MAGIC)
 					throw std::runtime_error("Header magic is wrong");
 
-				cmdId = header->cmdId;
-				size = dataSize - sizeof(IPCServerHeader);
+				cmdId = header->command_id;
+				size = dataSize - sizeof(CmifInHeader);
 				if (size)
-					ptr = ((u8*)header) + sizeof(IPCServerHeader);
+					ptr = (u8*)(header + 1);
 			}
+		}
+
+		void AssertTLSValid() 
+		{
+			if (!ptr) return;
+
+			auto header = (CmifInHeader*)ptr - 1;
+
+			//Not the best way but is enough to prevent accidental IPC calls 
+			if (header->magic != CMIF_IN_HEADER_MAGIC)
+				throw std::runtime_error("Header asserition failed, TLS has been modified since this Request object has been created");
 		}
 	};
 
@@ -152,17 +169,18 @@ namespace nxIpc
 		Result Finalize()
 		{
 			meta.type = CmifCommandType_Request;
-			meta.num_data_words = (sizeof(IPCServerHeader) + payload.length + 0x10) / 4;
+			meta.num_data_words = (sizeof(CmifOutHeader) + payload.length + 0x10) / 4;
 
 			void* base = armGetTls();
 			HipcRequest hipc = hipcMakeRequest(base, meta);
-			IPCServerHeader* rawHeader = (IPCServerHeader*)cmifGetAlignedDataStart(hipc.data_words, base);
+			CmifOutHeader* rawHeader = (CmifOutHeader*)cmifGetAlignedDataStart(hipc.data_words, base);
 
 			rawHeader->magic = CMIF_OUT_HEADER_MAGIC;
 			rawHeader->result = result;
+			rawHeader->token = 0;
 
 			if (payload.length)
-				std::memcpy(((u8*)rawHeader) + sizeof(IPCServerHeader), payload.data, payload.length);
+				std::memcpy(((u8*)rawHeader) + sizeof(CmifOutHeader), payload.data, payload.length);
 
 			if (meta.num_copy_handles)
 				hipc.copy_handles[0] = copyHandle;
@@ -173,7 +191,7 @@ namespace nxIpc
 	protected:
 		HipcMetadata meta = { 0 };
 
-		Buffer payload = { 0 };
+		Buffer payload = { 0, 0 };
 		Handle copyHandle;
 
 		Result result;

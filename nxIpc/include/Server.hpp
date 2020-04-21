@@ -1,168 +1,50 @@
 #pragma once
 #include <switch.h>
 #include <map>
-#include <atomic>
-#include <vector>
 #include <memory>
 
 #include "Types.hpp"
 #include "Exceptions.hpp"
 
-namespace nxIpc 
+namespace nxIpc
 {
-	template <u32 MaxClients, typename ServiceT>
-	class Server
+	class IInterface
 	{
-		static_assert(MaxClients > 0 && MaxClients < MAX_WAIT_OBJECTS, "MaxClients is out of range");
 	public:
-		Server(const char* ServerName)
+		virtual bool ReceivedCommand(Request& req) = 0;
+	};
+
+	class IServer
+	{
+	public:
+		IServer(u32 maxSessions, const char* name)
 		{
-			std::strncpy(this->ServerName.name, ServerName, sizeof(this->ServerName));
-			Handle ServerHandle;
-			R_THROW(smRegisterService(&ServerHandle, this->ServerName, false, MaxClients));
-			Handles.reserve(MaxClients + 1);
-			Handles.push_back(ServerHandle);
+			this->maxSessions = maxSessions;
+			std::strncpy(serverName.name, name, sizeof(serverName));
 		}
 
-		void RunServerInThread()
-		{
-			IsRunning = true;
-			ShouldTerminate = false;
-			while (IsRunning)
-			{
-				if (ShouldTerminate)
-					TerminateServer();
-
-				s32 handleIndex = -1;
-
-				Result rc = svcWaitSynchronization(&handleIndex, Handles.data(), Handles.size(), UINT64_MAX);
-				if (R_FAILED(rc))
-				{
-					if (rc == KERNELRESULT(Cancelled))
-					{
-						TerminateServer();
-						break;
-					}
-					if (rc != KERNELRESULT(ConnectionClosed))
-						throw RFailedException(rc, "R_FAILED" AT);
-				}
-
-				if (handleIndex < 0 || (size_t)handleIndex >= Handles.size())
-				{
-					TerminateServer();
-					throw RFailedException(MAKERESULT(Module_Libnx, LibnxError_NotFound), "R_FAILED" AT);
-				}
-
-				try
-				{
-					if (handleIndex)
-						ProcessSession(handleIndex);
-					else
-						AcceptNewSession();
-				}
-				catch (const std::exception & ex)
-				{
-					LogFunction("%s\n", ex.what());
-				}
-			}
-		}
-
-	protected:
-		std::atomic<bool> ShouldTerminate = false;
-
-		Handle& ServerHandle() 
-		{
-			return Handles[0];
-		}
-
+		virtual std::unique_ptr<IInterface> CreateSession(Handle handle) = 0;
+		
+		const SmServiceName& ServerName() const { return serverName; }
+		u32 MaxSessions() const { return maxSessions; }
 	private:
-		void TerminateServer()
+		u32 maxSessions;
+		SmServiceName serverName = {0};
+	};
+
+	template <typename T>
+	class Server : public IServer
+	{
+		static_assert(std::is_base_of<IInterface, T>(), "T must implement IInterface");
+	public:
+		Server(u32 maxSessions, const char* ServerName) : IServer(maxSessions, ServerName)
 		{
-			IsRunning = false;
-
-			for (Handle h : Handles)
-				svcCloseHandle(h);
-
-			Sessions.clear();
-			Handles.clear();
+			
 		}
-
-		void AcceptNewSession()
+	
+		std::unique_ptr<IInterface> CreateSession(Handle handle) override
 		{
-			Handle session = 0;
-			R_THROW(svcAcceptSession(&session, Handles[0]));
-
-			if (Handles.size() >= MaxClients)
-			{
-				svcCloseHandle(session);
-				LogFunction("Max number of clients reached !");
-				return;
-			}
-			else
-			{
-				Handles.push_back(session);
-				Sessions[session] = std::make_unique<ServiceT>();
-			}
+			return std::make_unique<T>();
 		}
-
-		void DeleteSession(u32 index)
-		{
-			if (!index || index >= Handles.size())
-				return;
-
-			Handle h = Handles[index];
-			Sessions.erase(h);
-
-			svcCloseHandle(Handles[index]);
-			Handles.erase(Handles.begin() + index);
-		}
-
-		void ProcessSession(u32 handleIndex)
-		{
-			Handle handle = Handles[handleIndex];
-
-			s32 _idx;
-			bool ShouldClose = false;
-
-			R_THROW(svcReplyAndReceive(&_idx, &handle, 1, 0, UINT64_MAX));
-			Request r = Request::ParseFromTLS();
-
-			switch (r.hipc.meta.type)
-			{
-			case CmifCommandType_Request:
-				try {
-					ShouldClose = Sessions[handle]->ReceivedCommand(r);
-				}
-				catch (const std::exception & ex)
-				{
-					LogFunction("%s", ex.what());
-					ShouldClose = true;
-					Response(R_EXCEPTION_IN_HANDLER).Finalize();
-				}
-				break;
-			case CmifCommandType_Close:
-				Response(0).Finalize();
-				ShouldClose = true;
-				break;
-			default:
-				Response(MAKERESULT(11, 403)).Finalize();
-				break;
-			}
-
-			Result rc = svcReplyAndReceive(&_idx, &handle, 0, handle, 0);
-
-			if (rc == KERNELRESULT(TimedOut))
-				rc = 0;
-			else R_THROW(rc);
-
-			if (ShouldClose)
-				DeleteSession(handleIndex);
-		}
-
-		std::vector<Handle> Handles;
-
-		std::atomic<bool> IsRunning;
-		std::map<Handle, std::unique_ptr<ServiceT>> Sessions;
-		SmServiceName ServerName = { 0 };
 	};
 }

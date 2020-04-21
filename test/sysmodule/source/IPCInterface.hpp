@@ -3,12 +3,11 @@
 #include <array>
 #include <algorithm>
 
-#include "../../../nxIpc/include/Types.hpp"
-#include "../../../nxIpc/include/Exceptions.hpp"
+#include "../../../nxIpc/include/Server.hpp"
 
 using namespace nxIpc;
 
-class TestServer
+class TestServer : public nxIpc::IInterface
 {
 public:
 	using CallHandler = void (TestServer::*)(Request & req);
@@ -22,7 +21,7 @@ public:
 		&TestServer::FireEvent,
 	};
 
-	bool ReceivedCommand(Request& req)
+	bool ReceivedCommand(Request& req) override
 	{
 		if (req.cmdId >= handlers.size())
 		{
@@ -55,17 +54,21 @@ protected:
 	void SetValue(Request& req)
 	{
 		valueStore = *req.Payload<MySettableValue>();
+		LogFunction("SetValue got: %d %s\n", valueStore.num, valueStore.name);
 		Response().Finalize();
 	}
 
 	void GetValue(Request& req)
 	{	
+		LogFunction("GetValue returning: %d %s\n", valueStore.num, valueStore.name);
 		Response().Payload(valueStore).Finalize();
 	}
 
 	void EchoSend(Request& req)
 	{
 		auto buf = req.ReadBuffer(0);
+
+		LogFunction("EchoSend got: %c%c%c%c\n", ((const char*)buf.data)[0], ((const char*)buf.data)[1], ((const char*)buf.data)[2], ((const char*)buf.data)[3]);
 
 		if (data)
 			delete[] data;
@@ -82,10 +85,14 @@ protected:
 		if (data)
 		{
 			req.WriteBuffer(0).AssignFrom_s(data, dataLen);
+			LogFunction("EchoReceive send: %c%c%c%c\n", ((const char*)data)[0], ((const char*)data)[1], ((const char*)data)[2], ((const char*)data)[3]);
 			Response().Payload((u32)dataLen).Finalize();
 		}
 		else
+		{
+			LogFunction("EchoReceive: no data\n");
 			Response(666).Finalize();
+		}
 	}
 
 	void GetEvent(Request& req)

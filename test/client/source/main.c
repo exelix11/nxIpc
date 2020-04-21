@@ -109,11 +109,11 @@ int main(int argc, char* argv[])
 	} while (0)
 
 	TEST("Connect", svcInitialize());
-	TEST("EchoMessage", EchoMessage());
 	TEST("SendValue", SendValue());
 	TEST("GetValue", GetValue());
 	TEST("GetEvent", GetEvent());
 	TEST("FireEvent", FireEvent());
+	TEST("EchoMessage", EchoMessage());
 
 	printf("\nALL GOOD !");
 
