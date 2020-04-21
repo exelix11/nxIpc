@@ -1,4 +1,4 @@
-#include "../../../nxIpc/include/Server.hpp"
+#include "../../../nxIpc/include/ServerHost.hpp"
 #include "IPCInterface.hpp"
 
 #include <cstdio>
@@ -9,8 +9,10 @@ extern "C" {
 	void CPPThread()
 	{
 		try {
-			nxIpc::Server<5, TestServer> test("test");
-			test.RunServerInThread();
+			nxIpc::Server<TestServer> test(5, "test");
+			nxIpc::ServerHost host;
+			host.AddServer(&test);
+			host.StartServer();
 		}
 		catch (const std::exception& ex){
 			printf(ex.what());

@@ -2,6 +2,11 @@
 #include <switch.h>
 #include <stdexcept>
 
+#define LogFunction(...) do { \
+	printf(__VA_ARGS__); \
+	fflush(stdout); \
+} while (0)
+
 namespace nxIpc 
 {
 	class RFailedException : public std::runtime_error
@@ -10,6 +15,7 @@ namespace nxIpc
 		RFailedException(Result rc, const char* message) : runtime_error(message)
 		{
 			ResultCode = rc;
+			LogFunction("RFailedException::ctor() %x\n", rc);
 		}
 
 		Result ResultCode;
@@ -20,15 +26,11 @@ namespace nxIpc
 #define TOSTRING(x) STRINGIFY(x)
 #define AT __FILE__ ":" TOSTRING(__LINE__)
 
-#define LogFunction(...) do { \
-	printf(__VA_ARGS__); \
-	fflush(stdout); \
-} while (0)
-
 #define R_THROW(x) do { \
 	Result ___code = x; \
-	if (R_FAILED(___code)) \
+	if (R_FAILED(___code)) { \
 		throw nxIpc::RFailedException(___code, "R_FAILED " AT); \
+	}\
 }while (0)
 
 #define R_THROW_ACTION(x, action) do { \

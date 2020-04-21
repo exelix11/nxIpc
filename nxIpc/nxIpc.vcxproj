@@ -136,6 +136,7 @@
     <ClInclude Include="..\test\sysmodule\source\IPCInterface.hpp" />
     <ClInclude Include="include\Exceptions.hpp" />
     <ClInclude Include="include\Server.hpp" />
+    <ClInclude Include="include\ServerHost.hpp" />
     <ClInclude Include="include\Types.hpp" />
     <ClInclude Include="include\ThreadedServer.hpp" />
   </ItemGroup>

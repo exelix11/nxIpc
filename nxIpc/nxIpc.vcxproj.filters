@@ -36,6 +36,9 @@
     <ClInclude Include="include\Server.hpp">
       <Filter>Lib</Filter>
     </ClInclude>
+    <ClInclude Include="include\ServerHost.hpp">
+      <Filter>Lib</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\test\sysmodule\source\main.c">
