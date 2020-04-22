@@ -5,6 +5,7 @@
 #include <atomic>
 #include <vector>
 #include <numeric>
+#include <cstdint>
 
 namespace nxIpc 
 {
@@ -73,6 +74,7 @@ namespace nxIpc
 			{
 				s.Clients = 0;
 				s.SHandle = 0;
+				R_THROW(smUnregisterService(s.Server->ServerName()));
 			}
 
 			ShouldTerminate = false;
@@ -88,19 +90,30 @@ namespace nxIpc
 			{
 				if (rc == KERNELRESULT(Cancelled))
 					return false;
-				if (rc != KERNELRESULT(ConnectionClosed))
-					throw RFailedException(rc, "R_FAILED" AT);
+				else R_THROW(rc);
 			}
 
 			if (index < 0 || (size_t)index >= Handles.size())
-				throw RFailedException(MAKERESULT(Module_Libnx, LibnxError_NotFound), "R_FAILED" AT);
+				throw std::runtime_error("Handle index is not valid");
 
 			Handle h = Handles[index];
 
-			if (!Sessions.count(h))
-				AcceptNewSession(h);
-			else
-				ProcessSession(h);
+			try {
+				if (!Sessions.count(h))
+					AcceptNewSession(h);
+				else
+					ProcessSession(h);
+			}
+			catch (const std::exception & ex)
+			{
+				LogFunction("%s\n", ex.what());
+				if (!Sessions.count(h))
+				{
+					LogFunction("Accept new session failed, terminating.");
+					return false;
+				}
+				else CloseHandle(h);
+			}
 
 			return true;
 		}
@@ -116,7 +129,7 @@ namespace nxIpc
 
 			if (server->Clients >= server->MaxClients)
 			{
-				svcCloseHandle(session);
+				R_THROW(svcCloseHandle(session));
 				LogFunction("Max number of clients reached !");
 				return;
 			}
@@ -133,51 +146,46 @@ namespace nxIpc
 			s32 _idx;
 			bool ShouldClose = false;
 
-			Result rc = svcReplyAndReceive(&_idx, &handle, 1, 0, UINT64_MAX);
-			if (R_SUCCEEDED(rc))
-			{
-				Request r = Request::ParseFromTLS();
+			R_THROW(svcReplyAndReceive(&_idx, &handle, 1, 0, UINT64_MAX));
 
-				switch (r.hipc.meta.type)
-				{
-				case CmifCommandType_Request:
-					try {
-						ShouldClose = Sessions[handle].interface->ReceivedCommand(r);
-					}
-					catch (const std::exception & ex)
-					{
-						LogFunction("%s\n", ex.what());
-						ShouldClose = true;
-						Response(R_EXCEPTION_IN_HANDLER).Finalize();
-					}
-					break;
-				case CmifCommandType_Close:
-					Response(0).Finalize();
-					ShouldClose = true;
-					break;
-				default:
-					Response(MAKERESULT(11, 403)).Finalize();
-					break;
+			Request r = Request::ParseFromTLS();
+
+			switch (r.hipc.meta.type)
+			{
+			case CmifCommandType_Request:
+				try {
+					ShouldClose = Sessions[handle].interface->ReceivedCommand(r);
 				}
-
-				rc = svcReplyAndReceive(&_idx, &handle, 0, handle, 0);
-
-				if (R_FAILED(rc) && rc != KERNELRESULT(TimedOut))
-					R_THROW(rc);
-			}
-			else 
-			{
+				catch (const std::exception & ex)
+				{
+					LogFunction("exception in handler: %s\n", ex.what());
+					Response(R_EXCEPTION_IN_HANDLER).Finalize();
+					ShouldClose = true;
+				}
+				break;
+			case CmifCommandType_Close:
+				Response().Finalize();
 				ShouldClose = true;
-				LogFunction("svcReplyAndReceive: %x", rc);
+				break;
+			default:
+				Response(MAKERESULT(11, 403)).Finalize();
+				break;
 			}
+
+			Result rc = svcReplyAndReceive(&_idx, &handle, 0, handle, 0);
+
+			if (rc != KERNELRESULT(TimedOut))
+				R_THROW(rc);
 
 			if (ShouldClose)
-			{
-				Sessions[handle].server->Clients--;
-				Sessions.erase(handle);
-				Handles.erase(std::find(Handles.begin(), Handles.end(), handle));
-				R_THROW(svcCloseHandle(handle));
-			}
+				CloseHandle(handle);
+		}
+
+		void CloseHandle(Handle handle)
+		{
+			Sessions[handle].server->Clients--;
+			Handles.erase(std::find(Handles.begin(), Handles.end(), handle));
+			R_THROW(svcCloseHandle(handle));
 		}
 
 		struct Server 

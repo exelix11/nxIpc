@@ -27,14 +27,14 @@ namespace nxIpc
 #define AT __FILE__ ":" TOSTRING(__LINE__)
 
 #define R_THROW(x) do { \
-	Result ___code = x; \
+	Result ___code = (x); \
 	if (R_FAILED(___code)) { \
 		throw nxIpc::RFailedException(___code, "R_FAILED " AT); \
 	}\
 }while (0)
 
 #define R_THROW_ACTION(x, action) do { \
-	Result ___code = x; \
+	Result ___code = (x); \
 	if (R_FAILED(___code)) { \
 		action; \
 		throw nxIpc::RFailedException(___code, "R_FAILED " AT); \
