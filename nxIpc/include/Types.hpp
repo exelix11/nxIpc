@@ -69,12 +69,10 @@ namespace nxIpc
 
 		Buffer ReadBuffer(u8 index)
 		{
-			AssertTLSValid();
-
 			if (index >= hipc.meta.num_send_buffers)
 				throw std::logic_error("Read buffer index out of bounds");
 
-			Buffer res = { hipcGetBufferAddress(&hipc.data.send_buffers[index]), hipcGetBufferSize(&hipc.data.send_buffers[index]) };
+			Buffer res = { hipcGetBufferAddress(&sendBuffer), hipcGetBufferSize(&sendBuffer) };
 
 			if (!res.data)
 				throw std::runtime_error("Read buffer pointer is null");
@@ -84,12 +82,10 @@ namespace nxIpc
 
 		WritableBuffer WriteBuffer(u8 index)
 		{
-			AssertTLSValid();
-
 			if (index >= hipc.meta.num_recv_buffers)
 				throw std::logic_error("Write buffer index out of bounds");
 
-			WritableBuffer res = { hipcGetBufferAddress(&hipc.data.recv_buffers[index]), hipcGetBufferSize(&hipc.data.recv_buffers[index]) };
+			WritableBuffer res = { hipcGetBufferAddress(&recvBuffer), hipcGetBufferSize(&recvBuffer) };
 
 			if (!res.data)
 				throw std::runtime_error("Write buffer pointer is null");
@@ -124,6 +120,12 @@ namespace nxIpc
 				size = dataSize - sizeof(CmifInHeader);
 				if (size)
 					ptr = (u8*)(header + 1);
+
+				//Backup buffers to prevent TLS issues
+				if (hipc.meta.num_send_buffers)
+					sendBuffer = hipc.data.send_buffers[0];
+				if (hipc.meta.num_recv_buffers)
+					recvBuffer = hipc.data.recv_buffers[0];
 			}
 		}
 
@@ -137,6 +139,9 @@ namespace nxIpc
 			if (header->magic != CMIF_IN_HEADER_MAGIC)
 				throw std::runtime_error("Header asserition failed, TLS has been modified since this Request object has been created");
 		}
+
+		HipcBufferDescriptor sendBuffer;
+		HipcBufferDescriptor recvBuffer;
 	};
 
 	struct Response

@@ -12,6 +12,7 @@ namespace nxIpc
 	{
 	public:
 		virtual bool ReceivedCommand(Request& req) = 0;
+		virtual ~IInterface() {}
 	};
 
 	class IServer
